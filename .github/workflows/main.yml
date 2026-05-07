@@ -1,0 +1,20 @@
+name: Build TWRP
+"on":
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build recovery image
+        run: ./build.sh
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery.img
+          path: '**/recovery.img'
