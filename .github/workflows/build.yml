@@ -1,22 +1,69 @@
+---
 name: Build TWRP
+
 "on":
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
-
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex \
+            g++-multilib gcc-multilib git gnupg gperf imagemagick \
+            lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool \
+            libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils \
+            lzop pngcrush rsync schedtool squashfs-tools xsltproc zip \
+            zlib1g-dev python-is-python3
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl -sL https://storage.googleapis.com/git-repo-downloads/repo > \
+            ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo cp ~/bin/repo /usr/local/bin/repo
+
+      - name: Initialize repo
+        run: |
+          mkdir workspace
+          cd workspace
+          URL=https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
+          repo init --depth=1 -u "$URL" -b twrp-12.1
+
+      - name: Repo Sync
+        run: |
+          cd workspace
+          repo sync -c -j"$(nproc --all)" --force-sync --no-clone-bundle \
+            --no-tags
+
+      - name: Copy device tree
+        run: |
+          cd workspace
+          mkdir -p device/samsung/gts8wifi
+          rsync -av --exclude='workspace' ../ device/samsung/gts8wifi/
+
       - name: Build recovery image
-        run: ./build.sh
+        run: |
+          cd workspace
+          export ALLOW_MISSING_DEPENDENCIES=true
+          source build/envsetup.sh
+          lunch twrp_gts8wifi-eng
+          make clean
+          make recoveryimage -j"$(nproc --all)"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: recovery.img
-          path: '**/recovery.img'
+          path: workspace/out/target/product/gts8wifi/recovery.img
